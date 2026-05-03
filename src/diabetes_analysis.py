@@ -99,19 +99,18 @@ if local_files:
         logger.warning(f"  Local file load failed: {e}")
 
 if df is None:
-    # Try CDC BRFSS via direct URL
-    urls = [
-        "https://raw.githubusercontent.com/propublica/compas-analysis/master/compas-scores-two-years.csv",
-        # Primary — CDC BRFSS subset
-        "https://raw.githubusercontent.com/dsrscientist/dataset1/master/diabetes.csv",
-    ]
-    for url in urls:
-        try:
-            df = pd.read_csv(url)
-            logger.info(f"  Loaded from URL: {url} — {df.shape}")
-            break
-        except Exception:
-            continue
+    # Pima Indians — named columns, reliable
+    PIMA_COLS = ["Pregnancies","Glucose","BloodPressure","SkinThickness",
+                 "Insulin","BMI","DiabetesPedigreeFunction","Age","Outcome"]
+    try:
+        df = pd.read_csv(
+            "https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.csv",
+            header=None, names=PIMA_COLS
+        )
+        logger.info(f"  Loaded Pima Indians — {df.shape}")
+        df.to_csv(DATA_DIR / "pima_diabetes.csv", index=False)
+    except Exception as e:
+        logger.warning(f"  Download failed: {e}")
 
 if df is None or df.empty:
     # Generate realistic CDC BRFSS-structure synthetic dataset
@@ -180,13 +179,22 @@ if df is None or df.empty:
 
 # Standardize column names
 df = df.apply(pd.to_numeric, errors='coerce')
+# Ensure target is binary 0/1
+target_candidate = next(
+    (c for c in df.columns if "diabetes" in c.lower() or "target" in c.lower() or "outcome" in c.lower()),
+    df.columns[-1]
+)
+df[target_candidate] = df[target_candidate].round().astype(int)
 logger.info(f"  Final dataset: {df.shape}")
 logger.info(f"  Columns: {list(df.columns)}")
 
 # Identify target and key clinical columns
 TARGET_COL = next(
-    (c for c in df.columns if "diabetes" in c.lower() or "target" in c.lower()),
-    df.columns[-1]
+    (c for c in df.columns if c.lower() in ["outcome","diabetes_binary","target","diabetes"]),
+    next(
+        (c for c in df.columns if "diabetes" in c.lower() and "pedigree" not in c.lower()),
+        df.columns[-1]
+    )
 )
 CLINICAL_COLS = [c for c in ["BMI", "Age", "GenHlth", "PhysHlth",
                                "MentHlth", "HighBP", "HighChol"]
@@ -353,7 +361,8 @@ rf_regressor = RandomForestRegressor(n_estimators=100, random_state=RANDOM_STATE
 rf_regressor.fit(X_imputed, y_imputed)
 
 feature_importance_scores = pd.Series(
-    rf_regressor.feature_importances_, index=feature_cols
+    rf_regressor.feature_importances_,
+    index=feature_cols[:len(rf_regressor.feature_importances_)]
 ).sort_values(ascending=False)
 
 feature_names     = list(feature_importance_scores.index)
@@ -429,17 +438,13 @@ fig_reg.write_html(OUTPUT_DIR / "actual_vs_predicted.html")
 logger.info("  ✅ Actual vs Predicted saved")
 
 # ════════════════════════════════════════════════════════════
-# STEP 10 — EXTENDED: PAIRPLOT (resume bullet)
+# STEP 10 — EXTENDED: PAIRPLOT 
 # ════════════════════════════════════════════════════════════
 
 logger.info("\nGenerating pairplot...")
-# Use whatever clinical cols are available
-PREF_PAIR = ["BMI","Age","GenHlth","PhysHlth","Glucose","BloodPressure"]
-pair_cols = [c for c in PREF_PAIR if c in df.columns][:4]
-if len(pair_cols) < 2:
-    pair_cols = [c for c in df.columns if c not in [TARGET_COL,"Age Group"]][:4]
-
-df_pair = df[pair_cols + [TARGET_COL]].dropna().sample(
+pair_cols = [c for c in ["BMI", "Age", "GenHlth", "PhysHlth", TARGET_COL]
+             if c in df.columns]
+df_pair   = df[pair_cols].dropna().sample(
     min(3000, len(df)), random_state=RANDOM_STATE
 )
 df_pair["Diabetes"] = df_pair[TARGET_COL].map({0: "No", 1: "Yes"})
@@ -461,7 +466,7 @@ plt.close()
 logger.info("  ✅ Pairplot saved")
 
 # ════════════════════════════════════════════════════════════
-# STEP 11 — EXTENDED: POPULATION HEALTH DASHBOARD (resume bullet)
+# STEP 11 — EXTENDED: POPULATION HEALTH DASHBOARD 
 # ════════════════════════════════════════════════════════════
 
 logger.info("\nGenerating population health dashboard...")
@@ -563,7 +568,7 @@ fig_pop.write_html(OUTPUT_DIR / "population_health_dashboard.html")
 logger.info("  ✅ Population health dashboard saved")
 
 # ════════════════════════════════════════════════════════════
-# STEP 12 — EXTENDED: CLASSIFICATION MODELS (resume bullet)
+# STEP 12 — EXTENDED: CLASSIFICATION MODELS 
 # ════════════════════════════════════════════════════════════
 
 logger.info("\nTraining classification models...")
@@ -610,7 +615,7 @@ plt.close()
 logger.info("  ✅ ROC curves saved")
 
 # ════════════════════════════════════════════════════════════
-# STEP 13 — EXTENDED: RESIDUAL ANALYSIS (resume bullet)
+# STEP 13 — EXTENDED: RESIDUAL ANALYSIS 
 # ════════════════════════════════════════════════════════════
 
 logger.info("\nGenerating residual analysis...")
@@ -646,7 +651,7 @@ plt.close()
 logger.info("  ✅ Residual analysis saved")
 
 # ════════════════════════════════════════════════════════════
-# STEP 14 — SAVE CLINICAL INSIGHTS (resume bullet)
+# STEP 14 — SAVE CLINICAL INSIGHTS 
 # ════════════════════════════════════════════════════════════
 
 insights = {
