@@ -27,13 +27,7 @@ WHAT THIS SCRIPT DOES
 12. Population health risk stratification dashboard
 13. Clinical insights JSON export
 
-NOTE ON LINEAR REGRESSION
-─────────────────────────
-Linear regression on a binary target (0/1) is mathematically invalid —
-it produces R²≈0 and a nonsensical plot (two vertical lines at 0 and 1).
-This is a classification problem, not regression.
-The correct models are classification algorithms with AUC as the metric.
-Linear regression has been REMOVED and replaced with proper classifiers.
+
 """
 
 import warnings
@@ -104,7 +98,6 @@ logger.info("\nStep 1 — Loading dataset...")
 
 df = None
 
-# Try local /data folder first
 local = list(DATA_DIR.glob("*.csv"))
 if local:
     try:
@@ -198,17 +191,7 @@ TARGET = next(
     df.columns[-1]
 )
 
-# ── COLUMN TYPES ──────────────────────────────────────────────
-# Binary columns (0/1): HighBP, HighChol, Smoker, Stroke,
-#   HeartDiseaseorAttack, PhysActivity, Fruits, Veggies,
-#   HvyAlcoholConsump, AnyHealthcare, NoDocbcCost, DiffWalk, Sex
-# Continuous: BMI
-# Ordinal (not truly continuous): Age (1-13 buckets),
-#   GenHlth (1-5), MentHlth (0-30 days), PhysHlth (0-30 days),
-#   Education (1-6), Income (1-8)
-#
-# The TARGET (Diabetes_binary) is 0/1 — this is a
-# CLASSIFICATION problem, not regression.
+
 
 # Auto-detect clinical cols from whatever columns actually exist
 KNOWN_CLINICAL = ["BMI","Age","GenHlth","PhysHlth","MentHlth",
@@ -435,8 +418,7 @@ logger.info("\nStep 9 — Training 6 classification algorithms...")
 
 # NOTE: PhysHlth and Age are ordinal (not truly binary) but treated as
 # numeric features — this is standard practice for CDC BRFSS analysis.
-# All features are fed to all models; feature importance shows which
-# actually matter.
+
 
 CLASSIFIERS = {
     "Logistic Regression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
